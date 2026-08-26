@@ -3,15 +3,15 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/:match*",
-      "destination": "/api"
+      "source": "/api/(.*)",
+      "destination": "/api/index.ts"
     },
     {
-      "source": "/auth/:match*",
-      "destination": "/api"
+      "source": "/auth/(.*)",
+      "destination": "/api/index.ts"
     },
     {
-      "source": "/:path*",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
