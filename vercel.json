@@ -3,15 +3,39 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index"
+      "source": "/auth/github/callback",
+      "destination": "/api/auth/github/callback"
     },
     {
-      "source": "/auth/(.*)",
-      "destination": "/api/index"
+      "source": "/auth/github",
+      "destination": "/api/auth/github"
     },
     {
-      "source": "/(.*)",
+      "source": "/auth/me",
+      "destination": "/api/auth/me"
+    },
+    {
+      "source": "/auth/logout",
+      "destination": "/api/auth/logout"
+    },
+    {
+      "source": "/api/public/:username/history",
+      "destination": "/api/public/[username]/history"
+    },
+    {
+      "source": "/api/public/:username",
+      "destination": "/api/public/[username]"
+    },
+    {
+      "source": "/api/me/score",
+      "destination": "/api/me/score"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/api/health"
+    },
+    {
+      "source": "/((?!api|auth|assets).*)",
       "destination": "/index.html"
     }
   ]
