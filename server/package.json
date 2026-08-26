@@ -4,7 +4,7 @@
   "main": "dist/app.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc && npm run build --workspace=@devrep/client && node -e \"const fs=require('fs'); if(fs.existsSync('../dist')) fs.cpSync('../dist', './dist', {recursive:true});\"",
     "start": "node dist/server.js",
     "migrate": "tsx src/db/runMigrations.ts",
     "test": "vitest run"
