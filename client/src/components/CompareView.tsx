@@ -14,7 +14,7 @@ import {
   TrendingUp,
   FileDown,
 } from 'lucide-react';
-import { ReputationScoreResult } from '@devrep/shared';
+import { ReputationScoreResult } from '../types/shared';
 import { CompareRadarChart } from './CompareRadarChart';
 import { generateComparisonPDF } from '../utils/pdfGenerator';
 

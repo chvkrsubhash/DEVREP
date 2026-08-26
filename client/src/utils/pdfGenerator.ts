@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ReputationScoreResult } from '@devrep/shared';
+import { ReputationScoreResult } from '../types/shared';
 
 /**
  * Generates an executive-grade, professional clean white PDF Developer Reputation Report.

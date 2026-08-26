@@ -12,7 +12,7 @@ import {
   Code2,
   FileDown,
 } from 'lucide-react';
-import { ReputationScoreResult, HistoricalSnapshot } from '@devrep/shared';
+import { ReputationScoreResult, HistoricalSnapshot } from '../types/shared';
 import { ScoreRadarChart } from './ScoreRadarChart';
 import { ScoreTrajectoryChart } from './ScoreTrajectoryChart';
 import { ScoreBreakdown } from './ScoreBreakdown';

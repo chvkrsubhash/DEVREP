@@ -1,5 +1,5 @@
 import { RawDeveloperData } from './types';
-import { AntiGamingAudit } from '@devrep/shared';
+import { AntiGamingAudit } from '../types/shared';
 
 /**
  * Anti-gaming heuristics to protect score integrity against common GitHub farming tactics:

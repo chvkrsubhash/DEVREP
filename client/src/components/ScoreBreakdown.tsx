@@ -10,7 +10,7 @@ import {
   GitMerge,
   Flame,
 } from 'lucide-react';
-import { SubScores, MetricBreakdown } from '@devrep/shared';
+import { SubScores, MetricBreakdown } from '../types/shared';
 
 interface ScoreBreakdownProps {
   subScores: SubScores;

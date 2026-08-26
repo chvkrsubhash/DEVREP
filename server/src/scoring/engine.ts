@@ -7,7 +7,7 @@ import {
   MetricBreakdown,
   ReputationTier,
   DataMode,
-} from '@devrep/shared';
+} from '../types/shared';
 
 /**
  * Calculates Code Impact Score (0 - 100)

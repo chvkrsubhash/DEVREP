@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from 'recharts';
-import { SubScores } from '@devrep/shared';
+import { SubScores } from '../types/shared';
 
 interface ScoreRadarChartProps {
   subScores: SubScores;

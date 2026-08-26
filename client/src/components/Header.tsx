@@ -1,6 +1,6 @@
 import React from 'react';
 import { ShieldCheck, Lock, Globe, Github, LogOut, GitCompare } from 'lucide-react';
-import { UserSession } from '@devrep/shared';
+import { UserSession } from '../types/shared';
 
 interface HeaderProps {
   userSession: UserSession | null;

@@ -11,7 +11,7 @@ import {
   FileDown,
   Sparkles,
 } from 'lucide-react';
-import { ReputationScoreResult, HistoricalSnapshot, UserSession } from '@devrep/shared';
+import { ReputationScoreResult, HistoricalSnapshot, UserSession } from '../types/shared';
 import { ScoreRadarChart } from './ScoreRadarChart';
 import { ScoreTrajectoryChart } from './ScoreTrajectoryChart';
 import { ScoreBreakdown } from './ScoreBreakdown';

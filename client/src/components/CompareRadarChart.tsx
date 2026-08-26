@@ -9,7 +9,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import { ReputationScoreResult } from '@devrep/shared';
+import { ReputationScoreResult } from '../types/shared';
 
 interface CompareRadarChartProps {
   userA: ReputationScoreResult;

@@ -5,7 +5,7 @@ import { PublicProfileView } from './components/PublicProfileView';
 import { PrivateDashboard } from './components/PrivateDashboard';
 import { CompareView } from './components/CompareView';
 import { TrustGuaranteeModal } from './components/TrustGuaranteeModal';
-import { ReputationScoreResult, HistoricalSnapshot, UserSession } from '@devrep/shared';
+import { ReputationScoreResult, HistoricalSnapshot, UserSession } from './types/shared';
 import { AlertCircle } from 'lucide-react';
 
 export const App: React.FC = () => {

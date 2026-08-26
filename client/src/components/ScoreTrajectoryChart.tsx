@@ -8,7 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { HistoricalSnapshot } from '@devrep/shared';
+import { HistoricalSnapshot } from '../types/shared';
 
 interface ScoreTrajectoryChartProps {
   snapshots: HistoricalSnapshot[];

@@ -1,5 +1,5 @@
 import { query } from '../pool';
-import { ReputationScoreResult, SubScores, DataMode, HistoricalSnapshot } from '@devrep/shared';
+import { ReputationScoreResult, SubScores, DataMode, HistoricalSnapshot } from '../../types/shared';
 
 export interface DbPublicScoreRow {
   id: number;

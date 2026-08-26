@@ -1,6 +1,6 @@
 import React from 'react';
 import { ShieldCheck, AlertTriangle, CheckCircle, Info } from 'lucide-react';
-import { AntiGamingAudit } from '@devrep/shared';
+import { AntiGamingAudit } from '../types/shared';
 
 interface AntiGamingAuditCardProps {
   audit: AntiGamingAudit;
