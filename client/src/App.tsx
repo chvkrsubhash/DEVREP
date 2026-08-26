@@ -65,7 +65,7 @@ export const App: React.FC = () => {
 
   const checkSession = async () => {
     try {
-      const res = await fetch('/auth/me');
+      const res = await fetch('/api/auth/me');
       const data = await res.json();
       if (data.isAuthenticated && data.user) {
         setUserSession(data.user);
@@ -161,12 +161,12 @@ export const App: React.FC = () => {
   };
 
   const handleOAuthLogin = () => {
-    window.location.href = '/auth/github';
+    window.location.href = '/api/auth/github';
   };
 
   const handleLogout = async () => {
     try {
-      await fetch('/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { method: 'POST' });
       setUserSession(null);
       setPrivateScore(null);
       setActiveTab('public');

@@ -7,7 +7,7 @@ export default function handler(req: any, res: any) {
     return res.redirect(`${APP_URL}/?auth_error=oauth_not_configured`);
   }
 
-  const redirectUri = encodeURIComponent(`${SERVER_URL}/auth/github/callback`);
+  const redirectUri = encodeURIComponent(`${SERVER_URL}/api/auth/github/callback`);
   const scope = encodeURIComponent('read:user,repo');
   const state = Math.random().toString(36).substring(7);
 
