@@ -4,13 +4,12 @@
   "main": "dist/app.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc && npm run build --workspace=@devrep/client",
     "start": "node dist/server.js",
     "migrate": "tsx src/db/runMigrations.ts",
     "test": "vitest run"
   },
   "dependencies": {
-    "@devrep/shared": "*",
     "@octokit/graphql": "^8.1.1",
     "@octokit/rest": "^20.1.1",
     "cookie-parser": "^1.4.6",
