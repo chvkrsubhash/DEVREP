@@ -1,0 +1,30 @@
+{
+  "name": "devrep-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@devrep/server & npm run dev --workspace=@devrep/client",
+    "dev:server": "npm run dev --workspace=@devrep/server",
+    "dev:client": "npm run dev --workspace=@devrep/client",
+    "build": "npm run build --workspace=@devrep/shared && npm run build --workspace=@devrep/server && npm run build --workspace=@devrep/client",
+    "vercel-build": "npm run build",
+    "test": "npm run test --workspace=@devrep/server",
+    "migrate": "npm run migrate --workspace=@devrep/server"
+  },
+  "keywords": [
+    "github",
+    "reputation",
+    "developer",
+    "scoring",
+    "oauth",
+    "octokit",
+    "vercel"
+  ],
+  "author": "",
+  "license": "MIT"
+}

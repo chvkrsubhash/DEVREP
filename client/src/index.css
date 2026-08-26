@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white;
+  }
+}
+
+/* Crisp Light Glassmorphism and Panels */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
+}
+
+.glass-panel-glow {
+  background: #ffffff;
+  border: 1px solid rgba(199, 210, 254, 0.8);
+  box-shadow: 0 10px 30px -5px rgba(99, 102, 241, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+}
+
+.glass-pill {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+/* Gradient text utilities for light background */
+.gradient-text-indigo {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-sky-600 to-emerald-600 font-black;
+}
+
+.gradient-text-gold {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 font-black;
+}
+
+/* =========================================================================
+ * PRINT / PDF EXPORT STYLES
+ * ========================================================================= */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide interactive header, search inputs, footer, and navigation in PDF */
+  header,
+  footer,
+  .no-print,
+  button:not(.print-keep),
+  input {
+    display: none !important;
+  }
+
+  /* Expand main container to full width */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Clean card borders for high quality printing */
+  .glass-panel,
+  .glass-panel-glow,
+  .bg-white {
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+    page-break-inside: avoid;
+  }
+
+  /* Print header banner */
+  .print-header {
+    display: block !important;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #e2e8f0;
+  }
+}
+
+.print-header {
+  display: none;
+}
