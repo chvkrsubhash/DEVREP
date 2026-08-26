@@ -5,9 +5,12 @@ import path from 'path';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: {
+    outDir: '../dist',
+    emptyOutDir: true,
+  },
   resolve: {
     alias: {
-      '@devrep/shared': path.resolve(__dirname, '../shared/src'),
       '@': path.resolve(__dirname, './src'),
     },
   },
