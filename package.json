@@ -1,20 +1,15 @@
 {
-  "name": "devrep-monorepo",
+  "name": "devrep",
   "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "shared",
-    "server",
-    "client"
-  ],
+  "type": "module",
   "scripts": {
-    "dev": "npm run dev --workspace=@devrep/server & npm run dev --workspace=@devrep/client",
-    "dev:server": "npm run dev --workspace=@devrep/server",
-    "dev:client": "npm run dev --workspace=@devrep/client",
-    "build": "npm run build --workspace=@devrep/server && npm run build --workspace=@devrep/client",
-    "vercel-build": "npm run build",
-    "test": "npm run test --workspace=@devrep/server",
-    "migrate": "npm run migrate --workspace=@devrep/server"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "server": "tsx server/src/server.ts",
+    "migrate": "tsx server/src/db/runMigrations.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@octokit/graphql": "^8.1.1",
@@ -28,6 +23,7 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
     "clsx": "^2.1.1",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
@@ -38,12 +34,17 @@
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.395.0",
     "pg": "^8.12.0",
+    "postcss": "^8.4.38",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.12.7",
     "tailwind-merge": "^2.3.0",
+    "tailwindcss": "^3.4.4",
     "tsx": "^4.15.7",
     "typescript": "^5.4.5",
     "vite": "^5.3.1"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0"
   }
 }
