@@ -2,6 +2,8 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
+import path from 'path';
+import fs from 'fs';
 import { authRouter } from './routes/auth';
 import { publicRouter } from './routes/public';
 import { privateRouter } from './routes/private';
@@ -26,7 +28,7 @@ export function createApp(): Express {
         if (!origin || allowedOrigins.includes(origin)) {
           callback(null, true);
         } else {
-          callback(null, true); // Allow dev origins
+          callback(null, true); // Allow dev & production origins
         }
       },
       credentials: true,
@@ -62,10 +64,34 @@ export function createApp(): Express {
   app.use('/api/public', publicRouter);
   app.use('/api/me', privateRouter);
 
-  // 404 handler
-  app.use((req: Request, res: Response) => {
-    res.status(404).json({ error: 'Endpoint not found' });
-  });
+  // Static Assets & Single-Page Application (SPA) Serving
+  const possibleDistPaths = [
+    path.resolve(process.cwd(), 'dist'),
+    path.resolve(__dirname, '../../dist'),
+    path.resolve(__dirname, '../dist'),
+    path.resolve(process.cwd(), 'client/dist'),
+  ];
+
+  const distPath = possibleDistPaths.find(p => fs.existsSync(p)) || path.resolve(process.cwd(), 'dist');
+
+  if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+
+    // Fallback for all SPA page routes (e.g. /, /u/:username, /compare, /dashboard)
+    app.get('*', (req: Request, res: Response) => {
+      const indexPath = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send('Frontend build not found. Please build the client.');
+      }
+    });
+  } else {
+    // 404 handler if no static frontend build exists
+    app.use((req: Request, res: Response) => {
+      res.status(404).json({ error: 'Endpoint not found' });
+    });
+  }
 
   // Global error handler
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
