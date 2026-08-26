@@ -52,7 +52,7 @@ export function computeImpact(repos: RawRepoData[], now: Date = new Date()): {
     });
   }
 
-  topStarredRepos.sort((a, b) => b.stars - a.stars);
+  topStarredRepos.sort((a: { stars: number }, b: { stars: number }) => b.stars - a.stars);
 
   const rawScore = totalWeightedStarPoints + totalWeightedForkPoints;
   // Non-linear compression to guarantee strict 0 - 100 bounds
@@ -213,7 +213,7 @@ export function computeBreadth(data: RawDeveloperData): {
     }
   }
 
-  primaryLanguages.sort((a, b) => b.bytes - a.bytes);
+  primaryLanguages.sort((a: { bytes: number }, b: { bytes: number }) => b.bytes - a.bytes);
 
   // Entropy normalized across languages
   const maxPossibleLangEntropy = Math.log2(Math.max(1, languageBytesMap.size));
