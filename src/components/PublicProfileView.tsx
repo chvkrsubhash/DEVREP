@@ -68,6 +68,18 @@ export const PublicProfileView: React.FC<PublicProfileViewProps> = ({
     }
   };
 
+  if (isLoading || !scoreData) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-24 text-center">
+        <div className="w-12 h-12 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <h3 className="text-lg font-bold text-slate-900 mb-2">Analyzing GitHub Profile & Computing 5-Axis Score...</h3>
+        <p className="text-xs text-slate-500 font-medium">
+          Extracting authentic commit cadence, repository impact, collaboration signals, and anti-gaming heuristics.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
       {/* 1. PROFILE HEADER & OVERALL SCORE HERO */}
