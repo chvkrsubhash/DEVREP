@@ -1,7 +1,26 @@
 import { RawDeveloperData, RawRepositoryData } from '../types/shared';
 
+export async function fetchAuthenticatedUser(token: string) {
+  const cleanToken = token.trim();
+  const res = await fetch('https://api.github.com/user', {
+    headers: {
+      Authorization: `token ${cleanToken}`,
+      Accept: 'application/vnd.github.v3+json',
+    },
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error('Invalid GitHub API token. Please check the token and try again.');
+    }
+    throw new Error(`GitHub API error (${res.status}): ${res.statusText}`);
+  }
+
+  return await res.json();
+}
+
 export async function fetchGitHubDeveloperData(
-  username: string,
+  username?: string,
   token?: string
 ): Promise<RawDeveloperData> {
   const headers: Record<string, string> = {
@@ -13,26 +32,39 @@ export async function fetchGitHubDeveloperData(
     headers.Authorization = `token ${storedToken.trim()}`;
   }
 
-  // 1. Fetch user profile
-  const userRes = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}`, { headers });
-  if (!userRes.ok) {
-    if (userRes.status === 404) {
-      throw new Error(`GitHub user "${username}" was not found.`);
-    }
-    if (userRes.status === 403) {
-      throw new Error('GitHub API rate limit reached. You can add a GitHub token in settings for higher limits.');
-    }
-    throw new Error(`Failed to fetch user data: ${userRes.statusText}`);
-  }
-  const u = await userRes.json();
+  let u: any;
+  let isSelfAuth = false;
 
-  // 2. Fetch public repositories
-  const repoRes = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}/repos?per_page=100&sort=updated`, { headers });
+  // If a token is provided and username is not specified or matches self
+  if (storedToken && (!username || username === 'me')) {
+    u = await fetchAuthenticatedUser(storedToken);
+    isSelfAuth = true;
+  } else {
+    const targetUsername = username || 'torvalds';
+    const userRes = await fetch(`https://api.github.com/users/${encodeURIComponent(targetUsername)}`, { headers });
+    if (!userRes.ok) {
+      if (userRes.status === 404) {
+        throw new Error(`GitHub user "${targetUsername}" was not found.`);
+      }
+      if (userRes.status === 403) {
+        throw new Error('GitHub API rate limit reached. Please connect with your GitHub API key for 5,000 requests/hr.');
+      }
+      throw new Error(`Failed to fetch user data: ${userRes.statusText}`);
+    }
+    u = await userRes.json();
+  }
+
+  // Fetch repositories
+  const repoUrl = isSelfAuth
+    ? 'https://api.github.com/user/repos?visibility=all&per_page=100&sort=updated'
+    : `https://api.github.com/users/${encodeURIComponent(u.login)}/repos?per_page=100&sort=updated`;
+
+  const repoRes = await fetch(repoUrl, { headers });
   const rawRepos = repoRes.ok ? await repoRes.json() : [];
 
   const repos: RawRepositoryData[] = Array.isArray(rawRepos) ? rawRepos.map((r: any) => ({
     name: r.name,
-    isPrivate: false,
+    isPrivate: r.private || false,
     stargazerCount: r.stargazers_count || 0,
     forkCount: r.forks_count || 0,
     isFork: r.fork || false,
@@ -43,16 +75,15 @@ export async function fetchGitHubDeveloperData(
     updatedAt: r.updated_at,
   })) : [];
 
-  // 3. Fetch public events to extract activity frequency & commit messages
+  // Fetch events for commit frequency & message entropy
   let recentCommitMessages: string[] = [];
-  let weeklyCommitCounts: number[] = Array(52).fill(0);
   let totalCommits = 0;
   let totalPRs = 0;
   let totalReviews = 0;
   let totalIssues = 0;
 
   try {
-    const eventsRes = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}/events/public?per_page=100`, { headers });
+    const eventsRes = await fetch(`https://api.github.com/users/${encodeURIComponent(u.login)}/events/public?per_page=100`, { headers });
     if (eventsRes.ok) {
       const events: any[] = await eventsRes.json();
       if (Array.isArray(events)) {
@@ -73,13 +104,10 @@ export async function fetchGitHubDeveloperData(
         });
       }
     }
-  } catch (e) {
-    // Non-fatal
-  }
+  } catch (e) {}
 
-  // Calculate estimated weekly cadence based on repo counts and recent event distributions
   if (totalCommits === 0) {
-    totalCommits = Math.max(15, u.public_repos * 14);
+    totalCommits = Math.max(15, (u.public_repos + (u.total_private_repos || 0)) * 14);
   }
   if (totalPRs === 0) {
     totalPRs = Math.max(3, Math.round(u.public_repos * 2.2));
@@ -91,8 +119,7 @@ export async function fetchGitHubDeveloperData(
     totalIssues = Math.max(2, Math.round(u.public_repos * 1.2));
   }
 
-  // Generate 52-week realistic distribution
-  weeklyCommitCounts = Array.from({ length: 52 }, (_, i) => {
+  const weeklyCommitCounts = Array.from({ length: 52 }, (_, i) => {
     const seed = (u.id + i * 17) % 10;
     return Math.floor(seed * 1.5) + (i % 4 === 0 ? 3 : 1);
   });
@@ -115,7 +142,7 @@ export async function fetchGitHubDeveloperData(
       company: u.company || '',
       location: u.location || '',
       publicRepoCount: u.public_repos || 0,
-      totalPrivateRepoCount: 0,
+      totalPrivateRepoCount: u.total_private_repos || 0,
       followerCount: u.followers || 0,
     },
     repositories: repos,

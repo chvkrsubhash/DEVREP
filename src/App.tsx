@@ -5,14 +5,18 @@ import { PublicProfileView } from './components/PublicProfileView';
 import { PrivateDashboard } from './components/PrivateDashboard';
 import { CompareView } from './components/CompareView';
 import { TrustGuaranteeModal } from './components/TrustGuaranteeModal';
+import { ConnectTokenModal } from './components/ConnectTokenModal';
 import { ReputationScoreResult, HistoricalSnapshot, UserSession } from './types/shared';
-import { fetchGitHubDeveloperData } from './utils/github';
+import { fetchGitHubDeveloperData, fetchAuthenticatedUser } from './utils/github';
 import { computeDeveloperReputation } from './utils/scoring';
 
 export const App: React.FC = () => {
-  // Navigation & View State
+  // Navigation & Modal State
   const [activeTab, setActiveTab] = useState<'public' | 'private' | 'compare'>('public');
   const [isTrustModalOpen, setIsTrustModalOpen] = useState<boolean>(false);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState<boolean>(false);
+  const [isConnectingToken, setIsConnectingToken] = useState<boolean>(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   // User Session (stored locally in browser)
   const [userSession, setUserSession] = useState<UserSession | null>(() => {
@@ -60,11 +64,10 @@ export const App: React.FC = () => {
       const existing = getLocalSnapshots(username, mode);
       const newSnapshot: HistoricalSnapshot = {
         id: Math.random().toString(36).substring(7),
-        username: result.username,
-        scoreType: mode as any,
         overallScore: result.overallScore,
         subScores: result.subScores,
-        recordedAt: new Date().toISOString(),
+        dataMode: mode as any,
+        computedAt: new Date().toISOString(),
       };
       const updated = [...existing.slice(-14), newSnapshot];
       localStorage.setItem(key, JSON.stringify(updated));
@@ -88,6 +91,10 @@ export const App: React.FC = () => {
       }
     } else if (path === '/dashboard') {
       setActiveTab('private');
+      if (userSession) {
+        fetchPrivateScore();
+      }
+      return;
     } else if (path === '/compare' || searchParams.has('u1')) {
       setActiveTab('compare');
       const u1 = searchParams.get('u1') || 'torvalds';
@@ -121,20 +128,18 @@ export const App: React.FC = () => {
   };
 
   // 3. Fetch Private Score
-  const fetchPrivateScore = async (username?: string) => {
-    const targetUser = username || userSession?.username || currentPublicUser;
-    if (!targetUser) return;
+  const fetchPrivateScore = async () => {
     setIsPrivateLoading(true);
     setPrivateError(null);
     try {
-      const rawData = await fetchGitHubDeveloperData(targetUser);
+      const rawData = await fetchGitHubDeveloperData('me');
       const scoreData = computeDeveloperReputation(rawData, 'private-inclusive');
-      const snapshots = saveLocalSnapshot(targetUser, 'private-inclusive', scoreData);
+      const snapshots = saveLocalSnapshot(rawData.user.login, 'private-inclusive', scoreData);
 
       setPrivateScore(scoreData);
       setPrivateSnapshots(snapshots);
     } catch (err: any) {
-      setPrivateError(err.message || 'Failed to load private score');
+      setPrivateError(err.message || 'Failed to calculate private-inclusive score.');
     } finally {
       setIsPrivateLoading(false);
     }
@@ -163,25 +168,44 @@ export const App: React.FC = () => {
     }
   };
 
-  // 5. Connect User Profile
-  const handleLogin = (customUsername?: string) => {
-    const username = (customUsername || prompt('Enter your GitHub username to connect:') || '').trim();
-    if (!username) return;
-    const session: UserSession = {
-      id: Math.random().toString(36).substring(7),
-      githubId: 'user_' + username,
-      username,
-      avatarUrl: `https://github.com/${username}.png`,
-      hasPrivateAccess: true,
-    };
-    setUserSession(session);
-    localStorage.setItem('devrep_user_session', JSON.stringify(session));
-    fetchPrivateScore(username);
+  // 5. Connect via GitHub API Key / Token
+  const handleConnectToken = async (token: string) => {
+    setIsConnectingToken(true);
+    setConnectError(null);
+    try {
+      const ghUser = await fetchAuthenticatedUser(token);
+      const session: UserSession = {
+        id: String(ghUser.id),
+        githubId: String(ghUser.id),
+        username: ghUser.login,
+        avatarUrl: ghUser.avatar_url,
+        hasPrivateAccess: true,
+        createdAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem('devrep_github_token', token.trim());
+      localStorage.setItem('devrep_user_session', JSON.stringify(session));
+      setUserSession(session);
+      setIsConnectModalOpen(false);
+
+      // Immediately compute private score and transition to private tab
+      setActiveTab('private');
+      const rawData = await fetchGitHubDeveloperData('me', token.trim());
+      const scoreData = computeDeveloperReputation(rawData, 'private-inclusive');
+      const snapshots = saveLocalSnapshot(ghUser.login, 'private-inclusive', scoreData);
+      setPrivateScore(scoreData);
+      setPrivateSnapshots(snapshots);
+    } catch (err: any) {
+      setConnectError(err.message || 'Authentication failed. Please verify your token.');
+    } finally {
+      setIsConnectingToken(false);
+    }
   };
 
   const handleLogout = () => {
     setUserSession(null);
     setPrivateScore(null);
+    localStorage.removeItem('devrep_github_token');
     localStorage.removeItem('devrep_user_session');
     setActiveTab('public');
   };
@@ -193,7 +217,7 @@ export const App: React.FC = () => {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         userSession={userSession}
-        onLoginClick={() => handleLogin()}
+        onLoginClick={() => setIsConnectModalOpen(true)}
         onLogoutClick={handleLogout}
         onOpenTrustModal={() => setIsTrustModalOpen(true)}
       />
@@ -245,7 +269,7 @@ export const App: React.FC = () => {
                 scoreData={privateScore}
                 snapshots={privateSnapshots}
                 isLoading={isPrivateLoading}
-                onLoginClick={() => handleLogin()}
+                onLoginClick={() => setIsConnectModalOpen(true)}
                 onRefresh={() => fetchPrivateScore()}
               />
             </div>
@@ -294,6 +318,18 @@ export const App: React.FC = () => {
       <TrustGuaranteeModal
         isOpen={isTrustModalOpen}
         onClose={() => setIsTrustModalOpen(false)}
+      />
+
+      {/* Direct GitHub Token Modal */}
+      <ConnectTokenModal
+        isOpen={isConnectModalOpen}
+        onClose={() => {
+          setIsConnectModalOpen(false);
+          setConnectError(null);
+        }}
+        onConnect={handleConnectToken}
+        isLoading={isConnectingToken}
+        error={connectError}
       />
     </div>
   );
