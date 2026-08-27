@@ -5,18 +5,14 @@ import { PublicProfileView } from './components/PublicProfileView';
 import { PrivateDashboard } from './components/PrivateDashboard';
 import { CompareView } from './components/CompareView';
 import { TrustGuaranteeModal } from './components/TrustGuaranteeModal';
-import { ConnectTokenModal } from './components/ConnectTokenModal';
 import { ReputationScoreResult, HistoricalSnapshot, UserSession } from './types/shared';
-import { fetchGitHubDeveloperData, fetchAuthenticatedUser } from './utils/github';
+import { fetchGitHubDeveloperData } from './utils/github';
 import { computeDeveloperReputation } from './utils/scoring';
 
 export const App: React.FC = () => {
   // Navigation & Modal State
   const [activeTab, setActiveTab] = useState<'public' | 'private' | 'compare'>('public');
   const [isTrustModalOpen, setIsTrustModalOpen] = useState<boolean>(false);
-  const [isConnectModalOpen, setIsConnectModalOpen] = useState<boolean>(false);
-  const [isConnectingToken, setIsConnectingToken] = useState<boolean>(false);
-  const [connectError, setConnectError] = useState<string | null>(null);
 
   // User Session (stored locally in browser)
   const [userSession, setUserSession] = useState<UserSession | null>(() => {
@@ -77,10 +73,37 @@ export const App: React.FC = () => {
     }
   };
 
-  // 1. Initial Route Parsing
+  // 1. Initial Route Parsing & OAuth Token Capture
   useEffect(() => {
     const path = window.location.pathname;
     const searchParams = new URLSearchParams(window.location.search);
+
+    // Check if returning from official GitHub OAuth authorization
+    const oauthToken = searchParams.get('token');
+    const oauthUsername = searchParams.get('username');
+    const oauthAvatar = searchParams.get('avatar');
+    const oauthId = searchParams.get('id');
+
+    if (oauthToken && oauthUsername) {
+      const session: UserSession = {
+        id: oauthId || Math.random().toString(36).substring(7),
+        githubId: oauthId || 'user_' + oauthUsername,
+        username: oauthUsername,
+        avatarUrl: oauthAvatar || `https://github.com/${oauthUsername}.png`,
+        hasPrivateAccess: true,
+        createdAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem('devrep_github_token', oauthToken.trim());
+      localStorage.setItem('devrep_user_session', JSON.stringify(session));
+      setUserSession(session);
+      setActiveTab('private');
+      window.history.replaceState(null, '', '/dashboard');
+
+      // Compute private score immediately with authorized token
+      fetchPrivateScore(oauthToken);
+      return;
+    }
 
     if (path.startsWith('/u/')) {
       const username = path.replace('/u/', '').trim();
@@ -128,11 +151,13 @@ export const App: React.FC = () => {
   };
 
   // 3. Fetch Private Score
-  const fetchPrivateScore = async () => {
+  const fetchPrivateScore = async (explicitToken?: string) => {
+    const token = explicitToken || localStorage.getItem('devrep_github_token') || '';
+    if (!token && !userSession) return;
     setIsPrivateLoading(true);
     setPrivateError(null);
     try {
-      const rawData = await fetchGitHubDeveloperData('me');
+      const rawData = await fetchGitHubDeveloperData('me', token);
       const scoreData = computeDeveloperReputation(rawData, 'private-inclusive');
       const snapshots = saveLocalSnapshot(rawData.user.login, 'private-inclusive', scoreData);
 
@@ -168,38 +193,9 @@ export const App: React.FC = () => {
     }
   };
 
-  // 5. Connect via GitHub API Key / Token
-  const handleConnectToken = async (token: string) => {
-    setIsConnectingToken(true);
-    setConnectError(null);
-    try {
-      const ghUser = await fetchAuthenticatedUser(token);
-      const session: UserSession = {
-        id: String(ghUser.id),
-        githubId: String(ghUser.id),
-        username: ghUser.login,
-        avatarUrl: ghUser.avatar_url,
-        hasPrivateAccess: true,
-        createdAt: new Date().toISOString(),
-      };
-
-      localStorage.setItem('devrep_github_token', token.trim());
-      localStorage.setItem('devrep_user_session', JSON.stringify(session));
-      setUserSession(session);
-      setIsConnectModalOpen(false);
-
-      // Immediately compute private score and transition to private tab
-      setActiveTab('private');
-      const rawData = await fetchGitHubDeveloperData('me', token.trim());
-      const scoreData = computeDeveloperReputation(rawData, 'private-inclusive');
-      const snapshots = saveLocalSnapshot(ghUser.login, 'private-inclusive', scoreData);
-      setPrivateScore(scoreData);
-      setPrivateSnapshots(snapshots);
-    } catch (err: any) {
-      setConnectError(err.message || 'Authentication failed. Please verify your token.');
-    } finally {
-      setIsConnectingToken(false);
-    }
+  // 5. Direct Official 1-Click GitHub OAuth Authorization
+  const handleOAuthLogin = () => {
+    window.location.href = '/api/auth/github';
   };
 
   const handleLogout = () => {
@@ -217,7 +213,7 @@ export const App: React.FC = () => {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         userSession={userSession}
-        onLoginClick={() => setIsConnectModalOpen(true)}
+        onLoginClick={handleOAuthLogin}
         onLogoutClick={handleLogout}
         onOpenTrustModal={() => setIsTrustModalOpen(true)}
       />
@@ -269,7 +265,7 @@ export const App: React.FC = () => {
                 scoreData={privateScore}
                 snapshots={privateSnapshots}
                 isLoading={isPrivateLoading}
-                onLoginClick={() => setIsConnectModalOpen(true)}
+                onLoginClick={handleOAuthLogin}
                 onRefresh={() => fetchPrivateScore()}
               />
             </div>
@@ -318,18 +314,6 @@ export const App: React.FC = () => {
       <TrustGuaranteeModal
         isOpen={isTrustModalOpen}
         onClose={() => setIsTrustModalOpen(false)}
-      />
-
-      {/* Direct GitHub Token Modal */}
-      <ConnectTokenModal
-        isOpen={isConnectModalOpen}
-        onClose={() => {
-          setIsConnectModalOpen(false);
-          setConnectError(null);
-        }}
-        onConnect={handleConnectToken}
-        isLoading={isConnectingToken}
-        error={connectError}
       />
     </div>
   );
