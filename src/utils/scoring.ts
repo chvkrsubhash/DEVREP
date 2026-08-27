@@ -3,7 +3,7 @@ import {
   ReputationScoreResult,
   ScoreBreakdown,
   AntiGamingFlag,
-} from '../src/types/shared';
+} from '../types/shared';
 
 export const SCORE_WEIGHTS = {
   CODE_IMPACT: 0.30,
@@ -12,10 +12,6 @@ export const SCORE_WEIGHTS = {
   BREADTH: 0.15,
   CODE_QUALITY: 0.10,
 };
-
-function sigmoid(x: number, k: number = 1, x0: number = 0): number {
-  return 1 / (1 + Math.exp(-k * (x - x0)));
-}
 
 function logarithmicScale(value: number, targetMax: number, maxScore: number = 100): number {
   if (value <= 0) return 0;
@@ -32,10 +28,9 @@ export function detectAntiGamingAnomalies(data: RawDeveloperData): AntiGamingFla
   const repos = data.repositories || [];
   const contributions = data.contributions;
 
-  // Check automated commit bursts
+  // 1. Check automated commit bursts
   const commitCount = contributions.totalCommitContributions;
-  const daysInYear = 365;
-  const avgCommitsPerDay = commitCount / daysInYear;
+  const avgCommitsPerDay = commitCount / 365;
   if (avgCommitsPerDay > 40) {
     flags.push({
       ruleId: 'HIGH_VELOCITY_COMMIT_BURST',
@@ -46,7 +41,7 @@ export function detectAntiGamingAnomalies(data: RawDeveloperData): AntiGamingFla
     });
   }
 
-  // Check fork-only activity
+  // 2. Check fork-only activity
   const originalRepos = repos.filter(r => !r.isFork);
   if (repos.length >= 5 && originalRepos.length === 0) {
     flags.push({
@@ -58,7 +53,7 @@ export function detectAntiGamingAnomalies(data: RawDeveloperData): AntiGamingFla
     });
   }
 
-  // Check commit message quality
+  // 3. Check commit message quality
   const trivialPatterns = /^(update|fix|test|wip|changes|bump|typo|\.)$/i;
   const sampleMessages = contributions.recentCommitMessages || [];
   if (sampleMessages.length >= 10) {
@@ -75,7 +70,7 @@ export function detectAntiGamingAnomalies(data: RawDeveloperData): AntiGamingFla
     }
   }
 
-  // Check empty repos
+  // 4. Check empty repos
   const emptyRepos = repos.filter(r => r.stargazerCount === 0 && r.forkCount === 0 && r.languages.length === 0);
   if (repos.length >= 6 && (emptyRepos.length / repos.length) > 0.7) {
     flags.push({
@@ -92,13 +87,13 @@ export function detectAntiGamingAnomalies(data: RawDeveloperData): AntiGamingFla
 
 export function computeDeveloperReputation(
   data: RawDeveloperData,
-  mode: 'public' | 'private-inclusive'
+  mode: 'public' | 'private-inclusive' = 'public'
 ): ReputationScoreResult {
   const startTime = Date.now();
   const repos = data.repositories || [];
   const contributions = data.contributions;
 
-  // 1. Code Impact
+  // 1. Code Impact (Stars, Forks, Community Pulls)
   const totalStars = repos.reduce((acc, r) => acc + (r.stargazerCount || 0), 0);
   const totalForks = repos.reduce((acc, r) => acc + (r.forkCount || 0), 0);
   const starScore = logarithmicScale(totalStars, 1000, 50);
@@ -106,13 +101,13 @@ export function computeDeveloperReputation(
   const mergedPrScore = logarithmicScale(contributions.totalPullRequestReviewContributions || 0, 50, 20);
   const rawCodeImpact = Math.min(100, starScore + forkScore + mergedPrScore);
 
-  // 2. Collaboration
+  // 2. Collaboration (PRs, Reviews, Issues)
   const prScore = logarithmicScale(contributions.totalPullRequestContributions || 0, 80, 45);
   const reviewScore = logarithmicScale(contributions.totalPullRequestReviewContributions || 0, 60, 35);
   const issueScore = logarithmicScale(contributions.totalIssueContributions || 0, 50, 20);
   const rawCollaboration = Math.min(100, prScore + reviewScore + issueScore);
 
-  // 3. Cadence Consistency
+  // 3. Cadence Consistency (Weekly active cadence + low variance)
   const weeks = contributions.weeklyCommitCounts || [];
   const activeWeeks = weeks.filter(w => w > 0).length;
   const activeWeekScore = (activeWeeks / Math.max(1, weeks.length || 52)) * 60;
@@ -123,7 +118,7 @@ export function computeDeveloperReputation(
   const consistencyFactor = Math.max(0, 1 - Math.min(1, coefficientOfVariation / 2)) * 40;
   const rawConsistency = Math.min(100, activeWeekScore + consistencyFactor);
 
-  // 4. Breadth
+  // 4. Breadth (Language diversity & Original projects)
   const langSet = new Set<string>();
   repos.forEach(r => (r.languages || []).forEach(l => langSet.add(l.name)));
   const languageCountScore = Math.min(60, langSet.size * 12);
@@ -131,7 +126,7 @@ export function computeDeveloperReputation(
   const domainScore = logarithmicScale(originalCount, 15, 40);
   const rawBreadth = Math.min(100, languageCountScore + domainScore);
 
-  // 5. Code Quality
+  // 5. Code Quality (Licenses, Descriptions, Recency)
   const hasLicenses = repos.filter(r => r.licenseInfo?.name).length;
   const licenseRatio = repos.length > 0 ? hasLicenses / repos.length : 0;
   const licenseScore = licenseRatio * 40;
@@ -144,7 +139,7 @@ export function computeDeveloperReputation(
   }).length * 5);
   const rawQuality = Math.min(100, licenseScore + documentationScore + maintenanceScore);
 
-  // Anti-Gaming Penalty
+  // Apply Anti-Gaming penalties
   const antiGamingFlags = detectAntiGamingAnomalies(data);
   const totalPenaltyPct = Math.min(80, antiGamingFlags.reduce((acc, f) => acc + f.scorePenaltyPercentage, 0));
   const penaltyMultiplier = (100 - totalPenaltyPct) / 100;

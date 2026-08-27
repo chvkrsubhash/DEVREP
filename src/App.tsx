@@ -6,36 +6,76 @@ import { PrivateDashboard } from './components/PrivateDashboard';
 import { CompareView } from './components/CompareView';
 import { TrustGuaranteeModal } from './components/TrustGuaranteeModal';
 import { ReputationScoreResult, HistoricalSnapshot, UserSession } from './types/shared';
-import { AlertCircle } from 'lucide-react';
+import { fetchGitHubDeveloperData } from './utils/github';
+import { computeDeveloperReputation } from './utils/scoring';
 
 export const App: React.FC = () => {
+  // Navigation & View State
   const [activeTab, setActiveTab] = useState<'public' | 'private' | 'compare'>('public');
-  const [userSession, setUserSession] = useState<UserSession | null>(null);
-  const [isTrustModalOpen, setIsTrustModalOpen] = useState(false);
+  const [isTrustModalOpen, setIsTrustModalOpen] = useState<boolean>(false);
 
-  // Public single profile state
-  const [currentPublicUser, setCurrentPublicUser] = useState<string>('');
+  // User Session (stored locally in browser)
+  const [userSession, setUserSession] = useState<UserSession | null>(() => {
+    try {
+      const saved = localStorage.getItem('devrep_user_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Public Profile State
+  const [currentPublicUser, setCurrentPublicUser] = useState<string>('torvalds');
   const [publicScore, setPublicScore] = useState<ReputationScoreResult | null>(null);
   const [publicSnapshots, setPublicSnapshots] = useState<HistoricalSnapshot[]>([]);
   const [isPublicLoading, setIsPublicLoading] = useState<boolean>(false);
   const [publicError, setPublicError] = useState<string | null>(null);
 
-  // Private state
+  // Private Dashboard State
   const [privateScore, setPrivateScore] = useState<ReputationScoreResult | null>(null);
   const [privateSnapshots, setPrivateSnapshots] = useState<HistoricalSnapshot[]>([]);
   const [isPrivateLoading, setIsPrivateLoading] = useState<boolean>(false);
   const [privateError, setPrivateError] = useState<string | null>(null);
 
-  // Compare state
+  // Compare Mode State
   const [compareUserA, setCompareUserA] = useState<ReputationScoreResult | null>(null);
   const [compareUserB, setCompareUserB] = useState<ReputationScoreResult | null>(null);
   const [isCompareLoading, setIsCompareLoading] = useState<boolean>(false);
   const [compareError, setCompareError] = useState<string | null>(null);
 
-  // 1. Initial Session Check & Route Parsing
-  useEffect(() => {
-    checkSession();
+  // Helper to load/save snapshots from localStorage
+  const getLocalSnapshots = (username: string, mode: string): HistoricalSnapshot[] => {
+    try {
+      const key = `devrep_snapshots_${mode}_${username.toLowerCase()}`;
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  };
 
+  const saveLocalSnapshot = (username: string, mode: string, result: ReputationScoreResult) => {
+    try {
+      const key = `devrep_snapshots_${mode}_${username.toLowerCase()}`;
+      const existing = getLocalSnapshots(username, mode);
+      const newSnapshot: HistoricalSnapshot = {
+        id: Math.random().toString(36).substring(7),
+        username: result.username,
+        scoreType: mode as any,
+        overallScore: result.overallScore,
+        subScores: result.subScores,
+        recordedAt: new Date().toISOString(),
+      };
+      const updated = [...existing.slice(-14), newSnapshot];
+      localStorage.setItem(key, JSON.stringify(updated));
+      return updated;
+    } catch {
+      return [];
+    }
+  };
+
+  // 1. Initial Route Parsing
+  useEffect(() => {
     const path = window.location.pathname;
     const searchParams = new URLSearchParams(window.location.search);
 
@@ -53,47 +93,24 @@ export const App: React.FC = () => {
       const u1 = searchParams.get('u1') || 'torvalds';
       const u2 = searchParams.get('u2') || 'gaearon';
       handleCompareSearch(u1, u2);
+      return;
     }
+
+    // Default initial fetch
+    fetchPublicScore('torvalds');
   }, []);
 
-  // 2. When activeTab changes to private, fetch private score if logged in
-  useEffect(() => {
-    if (activeTab === 'private' && userSession && !privateScore) {
-      fetchPrivateScore();
-    }
-  }, [activeTab, userSession]);
-
-  const checkSession = async () => {
-    try {
-      const res = await fetch('/api/auth/me');
-      const data = await res.json();
-      if (data.isAuthenticated && data.user) {
-        setUserSession(data.user);
-      }
-    } catch (err) {
-      console.warn('Session check failed:', err);
-    }
-  };
-
-  const fetchPublicScore = async (username: string, refresh = false) => {
+  // 2. Fetch Public Score
+  const fetchPublicScore = async (username: string) => {
     setIsPublicLoading(true);
     setPublicError(null);
     try {
-      const [scoreRes, historyRes] = await Promise.all([
-        fetch(`/api/public/${encodeURIComponent(username)}${refresh ? '?refresh=true' : ''}`),
-        fetch(`/api/public/${encodeURIComponent(username)}/history`),
-      ]);
-
-      if (!scoreRes.ok) {
-        const errData = await scoreRes.json();
-        throw new Error(errData.message || 'Failed to fetch public developer score');
-      }
-
-      const scoreData: ReputationScoreResult = await scoreRes.json();
-      const historyData: HistoricalSnapshot[] = historyRes.ok ? await historyRes.json() : [];
+      const rawData = await fetchGitHubDeveloperData(username);
+      const scoreData = computeDeveloperReputation(rawData, 'public');
+      const snapshots = saveLocalSnapshot(username, 'public', scoreData);
 
       setPublicScore(scoreData);
-      setPublicSnapshots(historyData);
+      setPublicSnapshots(snapshots);
       setCurrentPublicUser(username);
       window.history.pushState(null, '', `/u/${username}`);
     } catch (err: any) {
@@ -103,25 +120,19 @@ export const App: React.FC = () => {
     }
   };
 
-  const fetchPrivateScore = async (refresh = false) => {
+  // 3. Fetch Private Score
+  const fetchPrivateScore = async (username?: string) => {
+    const targetUser = username || userSession?.username || currentPublicUser;
+    if (!targetUser) return;
     setIsPrivateLoading(true);
     setPrivateError(null);
     try {
-      const [scoreRes, historyRes] = await Promise.all([
-        fetch(`/api/me/score${refresh ? '?refresh=true' : ''}`),
-        fetch('/api/me/history'),
-      ]);
-
-      if (!scoreRes.ok) {
-        const errData = await scoreRes.json();
-        throw new Error(errData.message || 'Failed to fetch private developer score');
-      }
-
-      const scoreData: ReputationScoreResult = await scoreRes.json();
-      const historyData: HistoricalSnapshot[] = historyRes.ok ? await historyRes.json() : [];
+      const rawData = await fetchGitHubDeveloperData(targetUser);
+      const scoreData = computeDeveloperReputation(rawData, 'private-inclusive');
+      const snapshots = saveLocalSnapshot(targetUser, 'private-inclusive', scoreData);
 
       setPrivateScore(scoreData);
-      setPrivateSnapshots(historyData);
+      setPrivateSnapshots(snapshots);
     } catch (err: any) {
       setPrivateError(err.message || 'Failed to load private score');
     } finally {
@@ -129,26 +140,18 @@ export const App: React.FC = () => {
     }
   };
 
+  // 4. Compare Search
   const handleCompareSearch = async (u1: string, u2: string) => {
     setIsCompareLoading(true);
     setCompareError(null);
     try {
-      const [resA, resB] = await Promise.all([
-        fetch(`/api/public/${encodeURIComponent(u1)}`),
-        fetch(`/api/public/${encodeURIComponent(u2)}`),
+      const [rawDataA, rawDataB] = await Promise.all([
+        fetchGitHubDeveloperData(u1),
+        fetchGitHubDeveloperData(u2),
       ]);
 
-      if (!resA.ok) {
-        const errA = await resA.json();
-        throw new Error(`Developer 1 (@${u1}): ${errA.message || 'Failed to fetch'}`);
-      }
-      if (!resB.ok) {
-        const errB = await resB.json();
-        throw new Error(`Developer 2 (@${u2}): ${errB.message || 'Failed to fetch'}`);
-      }
-
-      const dataA: ReputationScoreResult = await resA.json();
-      const dataB: ReputationScoreResult = await resB.json();
+      const dataA = computeDeveloperReputation(rawDataA, 'public');
+      const dataB = computeDeveloperReputation(rawDataB, 'public');
 
       setCompareUserA(dataA);
       setCompareUserB(dataB);
@@ -160,111 +163,138 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleOAuthLogin = () => {
-    window.location.href = '/api/auth/github';
+  // 5. Connect User Profile
+  const handleLogin = (customUsername?: string) => {
+    const username = (customUsername || prompt('Enter your GitHub username to connect:') || '').trim();
+    if (!username) return;
+    const session: UserSession = {
+      id: Math.random().toString(36).substring(7),
+      githubId: 'user_' + username,
+      username,
+      avatarUrl: `https://github.com/${username}.png`,
+      hasPrivateAccess: true,
+    };
+    setUserSession(session);
+    localStorage.setItem('devrep_user_session', JSON.stringify(session));
+    fetchPrivateScore(username);
   };
 
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      setUserSession(null);
-      setPrivateScore(null);
-      setActiveTab('public');
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
+  const handleLogout = () => {
+    setUserSession(null);
+    setPrivateScore(null);
+    localStorage.removeItem('devrep_user_session');
+    setActiveTab('public');
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       {/* Top Navbar */}
       <Header
-        userSession={userSession}
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        onOpenTrustModal={() => setIsTrustModalOpen(true)}
-        onLoginClick={handleOAuthLogin}
+        setActiveTab={setActiveTab}
+        userSession={userSession}
+        onLoginClick={() => handleLogin()}
         onLogoutClick={handleLogout}
+        onOpenTrustModal={() => setIsTrustModalOpen(true)}
       />
 
       {/* Main Content Area */}
       <main className="flex-1">
         {activeTab === 'public' && (
-          <div>
-            {/* Search Hero */}
-            <SearchHero onSearch={(u) => fetchPublicScore(u)} isLoading={isPublicLoading} />
+          <div className="space-y-8">
+            <SearchHero
+              onSearch={(username) => fetchPublicScore(username)}
+              isLoading={isPublicLoading}
+              currentUsername={currentPublicUser}
+            />
 
-            {/* Error Message if any */}
-            {publicError && (
-              <div className="max-w-3xl mx-auto px-4 mb-6">
-                <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-3 font-medium shadow-sm">
-                  <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              {publicError && (
+                <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium mb-6 animate-in fade-in flex items-center justify-between">
                   <span>{publicError}</span>
+                  <button
+                    onClick={() => setPublicError(null)}
+                    className="text-rose-500 hover:text-rose-700 font-bold ml-4"
+                  >
+                    Dismiss
+                  </button>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Profile View */}
-            {publicScore && (
               <PublicProfileView
                 scoreData={publicScore}
                 snapshots={publicSnapshots}
-                onRefresh={() => fetchPublicScore(currentPublicUser, true)}
                 isLoading={isPublicLoading}
+                onRefresh={() => fetchPublicScore(currentPublicUser)}
               />
-            )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'private' && (
+          <div className="py-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              {privateError && (
+                <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium mb-6">
+                  {privateError}
+                </div>
+              )}
+
+              <PrivateDashboard
+                userSession={userSession}
+                scoreData={privateScore}
+                snapshots={privateSnapshots}
+                isLoading={isPrivateLoading}
+                onLoginClick={() => handleLogin()}
+                onRefresh={() => fetchPrivateScore()}
+              />
+            </div>
           </div>
         )}
 
         {activeTab === 'compare' && (
-          <CompareView
-            onCompareSearch={handleCompareSearch}
-            userA={compareUserA}
-            userB={compareUserB}
-            isLoading={isCompareLoading}
-            error={compareError}
-          />
-        )}
-
-        {activeTab === 'private' && (
-          <div className="pt-8">
-            {privateError && (
-              <div className="max-w-3xl mx-auto px-4 mb-6">
-                <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-3 font-medium shadow-sm">
-                  <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
-                  <span>{privateError}</span>
-                </div>
-              </div>
-            )}
-
-            <PrivateDashboard
-              userSession={userSession}
-              scoreData={privateScore}
-              snapshots={privateSnapshots}
-              isLoading={isPrivateLoading}
-              onLoginClick={handleOAuthLogin}
-              onRefresh={() => fetchPrivateScore(true)}
-            />
+          <div className="py-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <CompareView
+                userA={compareUserA}
+                userB={compareUserB}
+                isLoading={isCompareLoading}
+                error={compareError}
+                onSearch={handleCompareSearch}
+              />
+            </div>
           </div>
         )}
       </main>
 
-      {/* Trust & Privacy Modal */}
-      <TrustGuaranteeModal isOpen={isTrustModalOpen} onClose={() => setIsTrustModalOpen(false)} />
-
       {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-8 px-4 text-center text-xs text-slate-500 shadow-sm">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-800">DevRep Engine</span>
-            <span>—</span>
-            <span>Auditable Developer Scoring System</span>
+      <footer className="mt-16 border-t border-slate-200 bg-white py-8 text-center text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 font-medium">
+          <p>© {new Date().getFullYear()} DevRep Analytics. Pure mathematical GitHub reputation audit engine.</p>
+          <div className="flex items-center gap-6">
+            <button
+              onClick={() => setIsTrustModalOpen(true)}
+              className="text-slate-600 hover:text-slate-900 transition-colors font-medium"
+            >
+              Anti-Gaming Guarantee
+            </button>
+            <a
+              href="https://github.com/chvkrsubhash/DEVREP"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-600 hover:text-slate-900 transition-colors font-medium"
+            >
+              GitHub Source
+            </a>
           </div>
-          <p className="text-slate-500">
-            Strict separation of public profiles & private-inclusive self-only scopes.
-          </p>
         </div>
       </footer>
+
+      {/* Trust & Guarantee Modal */}
+      <TrustGuaranteeModal
+        isOpen={isTrustModalOpen}
+        onClose={() => setIsTrustModalOpen(false)}
+      />
     </div>
   );
 };

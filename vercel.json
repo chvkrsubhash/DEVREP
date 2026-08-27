@@ -3,15 +3,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.ts"
-    },
-    {
-      "source": "/auth/(.*)",
-      "destination": "/api/index.ts"
-    },
-    {
-      "source": "/((?!api|auth|assets|favicon.ico).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
