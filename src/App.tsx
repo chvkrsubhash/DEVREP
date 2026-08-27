@@ -211,7 +211,7 @@ export const App: React.FC = () => {
       {/* Top Navbar */}
       <Header
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        onSelectTab={setActiveTab}
         userSession={userSession}
         onLoginClick={handleOAuthLogin}
         onLogoutClick={handleLogout}
